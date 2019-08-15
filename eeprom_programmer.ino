@@ -31,14 +31,20 @@ void setAddr(int addr, bool outputEnable){
 
 // Read one byte at a time
 byte readEEPROM(int addr){
-    DDRD &= 0x00;
-	setAddr(addr, true);
+    DDRC &= ~B00111111;
+    DDRD &= ~B11000000;
+	
+    setAddr(addr, true);
+    
     digitalWrite(CE, LOW);
     digitalWrite(OE, LOW);
-	byte data = PIND;
+	
+    byte data = (PIND & B11000000) | PINC;
+    
     digitalWrite(CE, HIGH);
     digitalWrite(OE, HIGH);
-	return data;
+	
+    return data;
 }
 
 // Read a block of memory
@@ -71,15 +77,21 @@ void writeMem(){
 
     for (int i = 0; i < count; i++){
         setAddr(addr);
-        DDRD |= 0xFF;
+        DDRC |= B00111111;
+        DDRD |= B11000000;
 
         b = Serial.read();
-        PORTD = b;
+        PORTC = (b & B00111111);
+        PORTD &= ~B11000000;
+        PORTD |= (b & B11000000);
+
         digitalWrite(WE, LOW);
         digitalWrite(CE, LOW);
         digitalWrite(WE, HIGH);
         digitalWrite(CE, LOW);
-        DDRD &= 0x00;
+        
+        DDRC &= ~B00111111;
+        DDRD &= ~B11000000;
         addr++;
     }
 
