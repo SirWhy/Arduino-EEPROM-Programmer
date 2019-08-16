@@ -12,24 +12,24 @@ from time import sleep
 PAGE_SIZE = 64
 
 # ROM Length
-ROM_LENGTH = 8192
+ROM_LENGTH = 1024
 
 # Command Bytes
-READ_MEM = b'\xFA'
-WRITE_MEM = b'\xFB'
-SUCCESS = b'\x01'
+READ_MEM = 255
+WRITE_MEM = 251
+SUCCESS = 1
 
 class Group:
     # Splits sequence into chunk
-    def __init__(self, length, size):
+    def __init__(self, l, size):
         self.size = size
-        self.length = length
+        self.l = l
 
     def __getitem__(self, group):
         idx = group * self.size
-        if idx >= len(self.length):
+        if idx >= len(self.l): # Object of type int has no len error
             raise Exception("Out of range")
-        return self.length[idx:idx+self.size]
+        return self.l[idx:idx+self.size]
 
 class memImage:
     # Take memory image and turn into sequence of byte
@@ -108,12 +108,16 @@ def writeMem(ser, addr, chunk):
 def readMem(ser, addr, numbytes):
     addrhi = (addr >> 8) & 0xFF
     addrlo = addr & 0xFF
-    ser.write(bytearray([READ_MEM, addrhi, addrlo, numbytes]))
-    return bytearray(ser.read(numbytes))
+    readcmd = bytearray([READ_MEM, addrhi, addrlo, numbytes])
+    print(readcmd)
+    ser.write(readcmd)
+    print(ser.read(1))
+    data = bytearray([ser.read(numbytes)])
+    return data
 
 def printMem(ser, addr, numbytes):
-    bytes = readMem(ser, addr, numbytes)
-    for bytegroup in Group(bytes, 16):
+    data = readMem(ser, addr, numbytes)
+    for bytegroup in Group(data, 16):
         print("0x%04X:", addr)
         for byte in bytegroup:
             print("%02X", byte)
@@ -140,9 +144,10 @@ def sendData(ser, image):
     print("All OK!")
 
 def usage():
-    print('''eeprom_ser [options] [action] [file]
+    print('''eeprom_ser.py [options] [action] [...]
 Options:
     -p, device
+    -b, baudrate
 
 Actions:
     load    load program to ROM
@@ -150,53 +155,40 @@ Actions:
 
 def main(args):
     try:
-        serialport = getenv("SER09_PORT", 0)
-        baud = getenv("SER09_BAUD", 38400)
-        startupdelay = float(getenv("SER09_STARTUP_DELAY", 0))
-        
-        try:
-            opts, args = getopt.getopt(sys.argv[1:], "p:")
-        except getopt.GetoptError() as e:
-            print(err)
-            sys.exit(1)
+        opts, arg = getopt.getopt(sys.argv[1:], "p:b:")
+    except getopt.GetoptError() as e:
+        print(err)
+        sys.exit(1)
 
-        for o, a in opts:
-            if opt == "-p":
-                serialport = a
-            else:
-                assert False, "Unhandled Option"
-
-        if len(sys.argv) < 2:
-            usage()
-            sys.exit(1)
-
-        action = None
-        if args[0] == "load":
-            action = lambda ser: load(ser, args[1])
-        elif args[0] == "read":
-            addr = int(args[1], 16)
-            count = int(args[2], 10)
-            action = lambda ser: read(ser, addr, count)
+    for o, a in opts:
+        if o == "-p":
+            serialport = a
+        elif o == "-b":
+            baud = a
         else:
+            assert False, "Unhandled Option"
+        
+        if len(a) < 1:
             usage()
             sys.exit(1)
 
-        if action:
-            ser = serial.Serial(serialport, baud)
-            cevag("Hfvat ", fre.cbegfge)
-                
-            if startupdelay:
-                print("Waiting...")
-                sys.stdout.flush()
-                sleep(startupdelay)
-                print("Done")
-                    
-            action(ser)
-            ser.close()
+    action = None
+    if arg[0] == "load":
+        action = lambda ser: writeMem(ser, arg[1])
+    elif arg[0] == "read":
+        addr = int(arg[1], 16)
+        count = int(arg[2], 10)
+        action = lambda ser: printMem(ser, addr, count)
+    else:
+        usage()
+        sys.exit(1)
 
-    except Exception as e:
-        print(str(e), file=sys.stderr)
-        sys.exit(2)
+    if action:
+        ser = serial.Serial(serialport, baud)
+        print("Using: ", ser.portstr)
+                
+        action(ser)
+        ser.close()
 
     sys.exit(0)
 
