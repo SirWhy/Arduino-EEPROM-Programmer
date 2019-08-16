@@ -19,14 +19,13 @@
 #define ROM_SIZE 8
 
 // Shift register usage
-void setAddr(int addr, bool outputEnable){
-	shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, (addr >> 8) | (outputEnable ? 0x00 : 0x80));
-	shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, addr);
+void setAddr(int addr){
+	  shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, (addr >> 8));
+	  shiftOut(SHIFT_DATA, SHIFT_CLK, MSBFIRST, addr);
 
-	// May need to add delay in here but digitalWrite may be slow enough
-	digitalWrite(SHIFT_LATCH, LOW);
-	digitalWrite(SHIFT_LATCH, HIGH);
-	digitalWrite(SHIFT_LATCH, LOW);
+	  digitalWrite(SHIFT_LATCH, LOW);
+	  digitalWrite(SHIFT_LATCH, HIGH);
+	  digitalWrite(SHIFT_LATCH, LOW);
 }
 
 // Read one byte at a time
@@ -34,7 +33,7 @@ byte readEEPROM(int addr){
     DDRC &= ~B00111111;
     DDRD &= ~B11000000;
 	
-    setAddr(addr, true);
+    setAddr(addr);
     
     digitalWrite(CE, LOW);
     digitalWrite(OE, LOW);
@@ -49,7 +48,7 @@ byte readEEPROM(int addr){
 
 // Read a block of memory
 void readMem(){
-    while (Serial.available < 3) {} // Wait for serial buffer
+    while (Serial.available() < 3) {} // Wait for serial buffer
     
     int addr = (Serial.read() << 8); // High byte address
     addr |= Serial.read(); // Low byte address
@@ -80,22 +79,22 @@ void writeMem(){
         DDRC |= B00111111;
         DDRD |= B11000000;
 
-        b = Serial.read();
-        PORTC = (b & B00111111);
+        data = Serial.read();
+        PORTC = (data & B00111111);
         PORTD &= ~B11000000;
-        PORTD |= (b & B11000000);
+        PORTD |= (data & B11000000);
 
         digitalWrite(WE, LOW);
         digitalWrite(CE, LOW);
         digitalWrite(WE, HIGH);
-        digitalWrite(CE, LOW);
+        digitalWrite(CE, HIGH);
         
         DDRC &= ~B00111111;
         DDRD &= ~B11000000;
         addr++;
     }
 
-    while (readByte(addr-1) != b) {}
+    while (readEEPROM(addr-1) != data) {}
 
     digitalWrite(13, ledState);
     ledState = (ledState == HIGH) ? LOW : HIGH;
@@ -104,11 +103,11 @@ void writeMem(){
 }
 
 void error(){
-    for(;;){
+    while(true){
         digitalWrite(13, HIGH);
-        delay(500);
+        delay(1000);
         digitalWrite(13, LOW);
-        delay(500);
+        delay(1000);
     }
 }
 
@@ -116,14 +115,14 @@ void setup(){
 	// Set control pins as outputs
     pinMode(CE, OUTPUT);
     pinMode(OE, OUTPUT);
-	pinMode(WE, OUTPUT);
-	pinMode(SHIFT_DATA, OUTPUT);
-	pinMode(SHIFT_CLK, OUTPUT);
-	pinMode(SHIFT_LATCH, OUTPUT);
+	  pinMode(WE, OUTPUT);
+	  pinMode(SHIFT_DATA, OUTPUT);
+	  pinMode(SHIFT_CLK, OUTPUT);
+	  pinMode(SHIFT_LATCH, OUTPUT);
     
     digitalWrite(CE, HIGH);
     digitalWrite(OE, HIGH);
-	digitalWrite(WE, HIGH);
+	  digitalWrite(WE, HIGH);
 
 	// Initialise Serial
     Serial.begin(38400);
@@ -135,15 +134,17 @@ void setup(){
 void loop(){
     if (Serial.available() > 0){
         byte in = Serial.read(); // Command byte
+        Serial.print(in);
         switch(in){
-            case readMem:
+            case READMEM:
                 readMem();
                 break;
-            case writeMem:
+            case WRITEMEM:
                 writeMem();
                 break;
             default:
                 error();
+                break;
          }
     }
 }
